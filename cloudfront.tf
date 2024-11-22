@@ -1,4 +1,3 @@
-
 # cloudfront.tf
 
 # Origin Access Control
@@ -25,6 +24,88 @@ resource "aws_s3_bucket_public_access_block" "storage_bucket" {
   ignore_public_acls      = true
   restrict_public_buckets = true
 }
+
+# Add lifecycle rule for Standard-IA transition instead of standard class storage
+resource "aws_s3_bucket_lifecycle_configuration" "bucket_lifecycle" {
+  bucket = aws_s3_bucket.storage_bucket.id
+
+  # Rule for avatar_images
+  rule {
+    id     = "avatar_images_to_ia"
+    status = "Enabled"
+    filter {
+      prefix = "avatar_images/"
+    }
+    transition {
+      days          = 30
+      storage_class = "STANDARD_IA"
+    }
+    
+    # If you enable versioning, uncomment these to:
+    # 1. Move old versions to STANDARD_IA
+    # 2. Keep only 4 versions
+    # 3. Delete versions older than 1 year
+    #
+    # noncurrent_version_transition {
+    #   noncurrent_days = 30
+    #   storage_class   = "STANDARD_IA"
+    # }
+    #
+    # noncurrent_version_expiration {
+    #   noncurrent_days = 365              # Delete versions after 1 year
+    #   newer_noncurrent_versions = 4      # Keep 4 most recent versions
+    # }
+  }
+
+  # Rule for student_files
+  rule {
+    id     = "student_files_to_ia"
+    status = "Enabled"
+    filter {
+      prefix = "student_files/"
+    }
+    transition {
+      days          = 30
+      storage_class = "STANDARD_IA"
+    }
+    
+    # If you enable versioning, uncomment these to:
+    # 1. Move old versions to STANDARD_IA
+    # 2. Keep only 4 versions
+    # 3. Delete versions older than 1 year
+    #
+    # noncurrent_version_transition {
+    #   noncurrent_days = 30
+    #   storage_class   = "STANDARD_IA"
+    # }
+    #
+    # noncurrent_version_expiration {
+    #   noncurrent_days = 365              # Delete versions after 1 year
+    #   newer_noncurrent_versions = 4      # Keep 4 most recent versions
+    # }
+  }
+
+  # General cleanup rule for failed uploads in all directories
+  rule {
+    id     = "cleanup_failed_uploads"
+    status = "Enabled"
+    filter {
+      prefix = ""  # Applies to entire bucket
+    }
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7  # Cleans up failed uploads after 7 days
+    }
+  }
+}
+
+# To enable versioning, uncomment this block:
+#
+# resource "aws_s3_bucket_versioning" "versioning" {
+#   bucket = aws_s3_bucket.storage_bucket.id
+#   versioning_configuration {
+#     status = "Enabled"
+#   }
+# }
 
 # Create folders (prefixes) in S3
 resource "aws_s3_object" "avatar_images" {
@@ -63,7 +144,8 @@ resource "aws_acm_certificate_validation" "cert" {
 resource "aws_cloudfront_distribution" "s3_distribution" {
   enabled         = true
   is_ipv6_enabled = true
-  price_class     = "PriceClass_100"
+  # Changed what type of cloudfront Price Class will be using, this is now world wide access edge location
+  price_class     = "PriceClass_All"
   aliases         = [var.domain_name]
 
   # Origin for React App

@@ -25,64 +25,39 @@ resource "aws_s3_bucket_public_access_block" "storage_bucket" {
   restrict_public_buckets = true
 }
 
-# Add lifecycle rule for Standard-IA transition instead of standard class storage
+
+# Add lifecycle rules with Intelligent-Tiering for access-based transitions
 resource "aws_s3_bucket_lifecycle_configuration" "bucket_lifecycle" {
   bucket = aws_s3_bucket.storage_bucket.id
 
   # Rule for avatar_images
   rule {
-    id     = "avatar_images_to_ia"
+    id     = "avatar_images_lifecycle"
     status = "Enabled"
     filter {
       prefix = "avatar_images/"
     }
-    transition {
-      days          = 30
-      storage_class = "STANDARD_IA"
-    }
     
-    # If you enable versioning, uncomment these to:
-    # 1. Move old versions to STANDARD_IA
-    # 2. Keep only 4 versions
-    # 3. Delete versions older than 1 year
-    #
-    # noncurrent_version_transition {
-    #   noncurrent_days = 30
-    #   storage_class   = "STANDARD_IA"
-    # }
-    #
-    # noncurrent_version_expiration {
-    #   noncurrent_days = 365              # Delete versions after 1 year
-    #   newer_noncurrent_versions = 4      # Keep 4 most recent versions
-    # }
+    # Transition to Intelligent-Tiering immediately
+    transition {
+      days          = 0
+      storage_class = "INTELLIGENT_TIERING"
+    }
   }
 
   # Rule for student_files
   rule {
-    id     = "student_files_to_ia"
+    id     = "student_files_lifecycle"
     status = "Enabled"
     filter {
       prefix = "student_files/"
     }
-    transition {
-      days          = 30
-      storage_class = "STANDARD_IA"
-    }
     
-    # If you enable versioning, uncomment these to:
-    # 1. Move old versions to STANDARD_IA
-    # 2. Keep only 4 versions
-    # 3. Delete versions older than 1 year
-    #
-    # noncurrent_version_transition {
-    #   noncurrent_days = 30
-    #   storage_class   = "STANDARD_IA"
-    # }
-    #
-    # noncurrent_version_expiration {
-    #   noncurrent_days = 365              # Delete versions after 1 year
-    #   newer_noncurrent_versions = 4      # Keep 4 most recent versions
-    # }
+    # Transition to Intelligent-Tiering immediately
+    transition {
+      days          = 0
+      storage_class = "INTELLIGENT_TIERING"
+    }
   }
 
   # General cleanup rule for failed uploads in all directories
@@ -95,6 +70,22 @@ resource "aws_s3_bucket_lifecycle_configuration" "bucket_lifecycle" {
     abort_incomplete_multipart_upload {
       days_after_initiation = 7  # Cleans up failed uploads after 7 days
     }
+  }
+}
+
+# Configure Intelligent-Tiering archive rules
+resource "aws_s3_bucket_intelligent_tiering_configuration" "intelligent_archive" {
+  bucket = aws_s3_bucket.storage_bucket.id
+  name   = "archive_configuration"
+
+  tiering {
+    access_tier = "ARCHIVE_ACCESS"
+    days        = 90
+  }
+
+  tiering {
+    access_tier = "DEEP_ARCHIVE_ACCESS"
+    days        = 365
   }
 }
 
@@ -147,6 +138,8 @@ resource "aws_cloudfront_distribution" "s3_distribution" {
   # Changed what type of cloudfront Price Class will be using, this is now world wide access edge location
   price_class     = "PriceClass_All"
   aliases         = [var.domain_name]
+  #this is the code that enables WAF in CloudFront
+  web_acl_id      = aws_wafv2_web_acl.cloudfront_waf.arn
 
   # Origin for React App
   origin {

@@ -79,11 +79,17 @@ resource "aws_s3_bucket_intelligent_tiering_configuration" "intelligent_archive"
   name   = "archive_configuration"
 
   tiering {
+# $0.004 per GB (~82% cheaper than Frequent Access)
+# Standard Retrieval: $0.03 per GB
+# 3-5 hours retrieval time
     access_tier = "ARCHIVE_ACCESS"
     days        = 90
   }
 
   tiering {
+# $0.00099 per GB (~95% cheaper than Frequent Access)
+# Standard Retrieval: $0.02 per GB
+# 12 hours retrieval time
     access_tier = "DEEP_ARCHIVE_ACCESS"
     days        = 365
   }
